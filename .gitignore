@@ -1,2 +1,6 @@
 /target
 /Cargo.lock
+.vscode/
+out*.txt
+test*.txt
+*.out

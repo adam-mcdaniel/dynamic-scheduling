@@ -21,6 +21,11 @@ impl TomasuloTable {
             if reorder_buffer.get_finished_instructions() >= instructions.len() {
                 break;
             }
+            // if cycle > 10 {
+            //     break;
+            // }
+
+
             if i < instructions.len() {
                 let op = instructions[i].clone();
                 if reorder_buffer.add(op).is_ok() {
@@ -37,7 +42,12 @@ impl TomasuloTable {
                     }
                     self.rows[i].issued = Some(cycle);
                     i += 1;
+                } else {
+                    trace!("Failed to add instruction {i}: {op}");
                 }
+            } else if (reorder_buffer.get_finished_instructions() >= instructions.len()) {
+                info!("Stopped at instruction {}:", i);
+                break
             }
             let stages = reorder_buffer.get_stages();
             for (instruction_num, op, stage) in stages {
@@ -67,9 +77,9 @@ impl TomasuloTable {
                     _ => {}
                 }
             }
-            cycle += 1;
-            info!("Cycle {}\n\n{}", cycle, reorder_buffer);
             reorder_buffer.tick(config);
+            cycle += 1;
+            trace!("Cycle {}\n\n{}", cycle, reorder_buffer);
 
 
             let stages = reorder_buffer.get_stages();
@@ -130,10 +140,11 @@ struct Row {
 impl Display for Row {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(op) = &self.op {
-            write!(f, "{:22}", format!("{op}"))?;
+            write!(f, "{:<22}", format!("{op}"))?;
         } else {
             write!(f, "{:22}", "?")?;
         }
+
 
         if let Some(issued) = &self.issued {
             write!(f, "{:>6}", issued)?;

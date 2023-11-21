@@ -166,7 +166,15 @@ impl Display for Operand {
             Operand::Immediate(imm) => write!(f, "{}", imm),
             Operand::Register(reg) => write!(f, "{}", reg),
             Operand::Indirect(reg, imm) => write!(f, "{imm}({reg})"),
-            Operand::Global(name) => write!(f, "{}", name.iter().collect::<String>()),
+            Operand::Global(name) => {
+                for c in name.iter() {
+                    if *c == '\0' {
+                        break;
+                    }
+                    write!(f, "{}", c)?;
+                }
+                Ok(())
+            },
             Operand::None => write!(f, ""),
         }
     }
@@ -202,7 +210,9 @@ pub enum RiscVOp {
 
 impl RiscVOp {
     pub fn functional_unit(&self) -> FunctionalUnit {
-        if self.is_alu() {
+        if self.is_branch() {
+            FunctionalUnit::EffectAddr
+        } else if self.is_alu() {
             FunctionalUnit::ALU
         } else if self.is_fp_add() {
             FunctionalUnit::FPUAdd
@@ -220,12 +230,12 @@ impl RiscVOp {
     }
 
     pub fn writes_back(&self) -> bool {
-        self.is_alu() || self.is_fp() || self.is_load()
+        self.is_alu() || self.is_fp() || self.is_load() && !self.is_branch()
     }
 
     pub fn parse(line: &str) -> Self {
         // Get the string until the ` ` character
-        let mut split_by_space = line.split(' ');
+        let mut split_by_space = line.split_whitespace();
         let op = split_by_space.next().unwrap();
         // Now get all the arguments separated by `,`
         let dst = split_by_space.next().unwrap().split(',').next().unwrap();
@@ -263,12 +273,20 @@ impl RiscVOp {
             "fsub" => RiscVOp::FloatSub(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
             "fmul" => RiscVOp::FloatMul(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
             "fdiv" => RiscVOp::FloatDiv(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
+            "fadd.s" => RiscVOp::FloatAdd(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
+            "fsub.s" => RiscVOp::FloatSub(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
+            "fmul.s" => RiscVOp::FloatMul(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
+            "fdiv.s" => RiscVOp::FloatDiv(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
             _ => unimplemented!()
         }
     }
 
     pub const fn is_load(&self) -> bool {
         matches!(self, RiscVOp::LoadWord(_, _, _) | RiscVOp::LoadFloat(_, _, _))
+    }
+
+    pub const fn is_store(&self) -> bool {
+        matches!(self, RiscVOp::StoreWord(_, _, _) | RiscVOp::StoreFloat(_, _, _))
     }
 
     pub const fn is_data_transfer(&self) -> bool {
@@ -310,12 +328,12 @@ impl RiscVOp {
         }
     }
 
-    pub fn dst(&self) -> Operand {
-        match self {
+    pub fn dst(&self) -> Option<Operand> {
+        Some(match self {
             RiscVOp::LoadWord(dst, _, _) => *dst,
-            RiscVOp::StoreWord(dst, _, _) => *dst,
+            RiscVOp::StoreWord(_, _, _) => None?,
             RiscVOp::LoadFloat(dst, _, _) => *dst,
-            RiscVOp::StoreFloat(dst, _, _) => *dst,
+            RiscVOp::StoreFloat(_, _, _) => None?,
             RiscVOp::Add(dst, _, _) => *dst,
             RiscVOp::Sub(dst, _, _) => *dst,
             RiscVOp::BranchEqual(dst, _, _) => *dst,
@@ -324,7 +342,7 @@ impl RiscVOp {
             RiscVOp::FloatSub(dst, _, _) => *dst,
             RiscVOp::FloatMul(dst, _, _) => *dst,
             RiscVOp::FloatDiv(dst, _, _) => *dst,
-        }
+        })
     }
 
     pub fn src1(&self) -> Operand {
@@ -366,37 +384,24 @@ impl RiscVOp {
 impl Display for RiscVOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RiscVOp::LoadWord(dst, src, addr) => write!(f, "lw {},{}:{addr}", dst, src),
-            RiscVOp::StoreWord(dst, src, addr) => write!(f, "sw {},{}:{addr}", dst, src),
-            RiscVOp::Add(dst, src1, src2) => write!(f, "add {},{},{}", dst, src1, src2),
-            RiscVOp::Sub(dst, src1, src2) => write!(f, "sub {},{},{}", dst, src1, src2),
-            RiscVOp::BranchEqual(dst, src1, src2) => write!(f, "beq {},{},{}", dst, src1, src2),
-            RiscVOp::BranchNotEqual(dst, src1, src2) => write!(f, "bne {},{},{}", dst, src1, src2),
-            RiscVOp::LoadFloat(dst, src, addr) => write!(f, "flw {},{}:{addr}", dst, src),
-            RiscVOp::StoreFloat(dst, src, addr) => write!(f, "fsw {},{}:{addr}", dst, src),
-            RiscVOp::FloatAdd(dst, src1, src2) => write!(f, "fadd {},{},{}", dst, src1, src2),
-            RiscVOp::FloatSub(dst, src1, src2) => write!(f, "fsub {},{},{}", dst, src1, src2),
-            RiscVOp::FloatMul(dst, src1, src2) => write!(f, "fmul {},{},{}", dst, src1, src2),
-            RiscVOp::FloatDiv(dst, src1, src2) => write!(f, "fdiv {},{},{}", dst, src1, src2),
+            RiscVOp::LoadWord(dst, src, addr)            => write!(f, "lw     {},{}:{addr}", dst, src),
+            RiscVOp::StoreWord(dst, src, addr)           => write!(f, "sw     {},{}:{addr}", dst, src),
+            RiscVOp::Add(dst, src1, src2)            => write!(f, "add    {},{},{}", dst, src1, src2),
+            RiscVOp::Sub(dst, src1, src2)            => write!(f, "sub    {},{},{}", dst, src1, src2),
+            RiscVOp::BranchEqual(dst, src1, src2)    => write!(f, "beq    {},{},{}", dst, src1, src2),
+            RiscVOp::BranchNotEqual(dst, src1, src2) => write!(f, "bne    {},{},{}", dst, src1, src2),
+            RiscVOp::LoadFloat(dst, src, addr)           => write!(f, "flw    {},{}:{addr}", dst, src),
+            RiscVOp::StoreFloat(dst, src, addr)          => write!(f, "fsw    {},{}:{addr}", dst, src),
+            RiscVOp::FloatAdd(dst, src1, src2)       => write!(f, "fadd.s {},{},{}", dst, src1, src2),
+            RiscVOp::FloatSub(dst, src1, src2)       => write!(f, "fsub.s {},{},{}", dst, src1, src2),
+            RiscVOp::FloatMul(dst, src1, src2)       => write!(f, "fmul.s {},{},{}", dst, src1, src2),
+            RiscVOp::FloatDiv(dst, src1, src2)       => write!(f, "fdiv.s {},{},{}", dst, src1, src2),
         }
     }
 }
 
 impl Debug for RiscVOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        match self {
-            RiscVOp::LoadWord(dst, src, addr) => write!(f, "lw {},{}:{addr}", dst, src),
-            RiscVOp::StoreWord(dst, src, addr) => write!(f, "sw {},{}:{addr}", dst, src),
-            RiscVOp::Add(dst, src1, src2) => write!(f, "add {},{},{}", dst, src1, src2),
-            RiscVOp::Sub(dst, src1, src2) => write!(f, "sub {},{},{}", dst, src1, src2),
-            RiscVOp::BranchEqual(dst, src1, src2) => write!(f, "beq {},{},{}", dst, src1, src2),
-            RiscVOp::BranchNotEqual(dst, src1, src2) => write!(f, "bne {},{},{}", dst, src1, src2),
-            RiscVOp::LoadFloat(dst, src, addr) => write!(f, "flw {},{}:{addr}", dst, src),
-            RiscVOp::StoreFloat(dst, src, addr) => write!(f, "fsw {},{}:{addr}", dst, src),
-            RiscVOp::FloatAdd(dst, src1, src2) => write!(f, "fadd {},{},{}", dst, src1, src2),
-            RiscVOp::FloatSub(dst, src1, src2) => write!(f, "fsub {},{},{}", dst, src1, src2),
-            RiscVOp::FloatMul(dst, src1, src2) => write!(f, "fmul {},{},{}", dst, src1, src2),
-            RiscVOp::FloatDiv(dst, src1, src2) => write!(f, "fdiv {},{},{}", dst, src1, src2),
-        }
+        write!(f, "{}", self)
     }
 }

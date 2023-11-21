@@ -4,22 +4,19 @@ use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
-    Queued,
-
     Issue,
     Execute(u64), // u64 is the cycles left to execute
     MemAccess,
     WriteBack,
     WaitingToCommit,
     Commit,
-
-    Stall
 }
 
 
 pub struct ReorderBuffer {
     register_mapping: BTreeMap<Register, u64>,
-    addresses_in_use: BTreeSet<u64>,
+    addresses_stored: BTreeSet<u64>,
+    addresses_loaded: BTreeSet<u64>,
 
     available_reservation_stations: BTreeMap<FunctionalUnit, usize>,
 
@@ -55,7 +52,8 @@ impl ReorderBuffer {
 
         Self {
             register_mapping: BTreeMap::new(),
-            addresses_in_use: BTreeSet::new(),
+            addresses_loaded: BTreeSet::new(),
+            addresses_stored: BTreeSet::new(),
             available_reservation_stations,
 
             entries,
@@ -94,11 +92,25 @@ impl ReorderBuffer {
             return Err(());
         }
 
+        if let Some(addr) = op.addr() {
+            if self.addresses_loaded.contains(&addr) {
+                return Err(());
+            }
+            if self.addresses_stored.contains(&addr) {
+                return Err(());
+            }
+        }
+
         // Get the reservation station for the op
+        debug!("Adding {} to the reservation station", op);
         self.available_reservation_stations.entry(op.functional_unit()).and_modify(|e| *e -= 1);
 
         // Add the register mapping
-        self.register_mapping.insert(op.dst().as_reg(), self.head as u64);
+        if let Some(dst) = op.dst() {
+            debug!("Adding {} to the register mapping", dst);
+            let dst_reg = dst.as_reg();
+            self.register_mapping.insert(dst_reg, self.head as u64);
+        }
         self.entries[self.head] = Some((self.issue_count, op, Stage::Issue));
         self.head = self.head.wrapping_add(1) % self.size;
         self.entries_used += 1;
@@ -157,7 +169,6 @@ impl ReorderBuffer {
                         }
                     }
                 }
-                self.available_reservation_stations.entry(op.functional_unit()).and_modify(|e| *e += 1);
                 if all_committed {
                     self.entries[i].as_mut().unwrap().2 = Stage::Commit;
                 } else {
@@ -330,9 +341,18 @@ impl ReorderBuffer {
             }
         }
         */
+        let mut already_committed = false;
 
         // Check the commit stage
-        self.get_all_in_stage(Stage::Commit).iter().for_each(|(i, _)| {
+        // self.available_reservation_stations.entry(op.functional_unit()).and_modify(|e| *e += 1);
+        self.get_all_in_stage(Stage::Commit).iter().for_each(|(i, op)| {
+            if let Some(addr) = op.addr() {
+                if op.is_load() {
+                    self.addresses_loaded.remove(&addr);
+                } else {
+                    self.addresses_stored.remove(&addr);
+                }
+            }
             self.entries_committed += 1;
             self.entries[*i] = None;
             self.tail = self.tail.wrapping_add(1) % self.size;
@@ -341,7 +361,7 @@ impl ReorderBuffer {
 
 
         // Check the commit stage
-        self.get_all_in_stage(Stage::WaitingToCommit).iter().for_each(|(i, _)| {
+        self.get_all_in_stage(Stage::WaitingToCommit).iter().for_each(|(i, op)| {
             // Check if all the instructions before this one are committed
             let mut all_committed = true;
             for j in self.tail..self.tail + self.size {
@@ -355,8 +375,12 @@ impl ReorderBuffer {
                     }
                 }
             }
-            if all_committed {
+            if all_committed && !already_committed {
+                // if let Some(addr) = op.addr() {
+                //     self.addresses_in_use.remove(&addr);
+                // }
                 self.entries[*i].as_mut().unwrap().2 = Stage::Commit;
+                already_committed = true;
             }
         });
 
@@ -374,35 +398,82 @@ impl ReorderBuffer {
         let mut removed_registers = Vec::new();
 
         let mut wrote_to_cdb = false;
-        for i in self.head..self.head + self.size {
-            if self.write_to_cdb(i % self.size) {
-                let op = &self.entries[i % self.size].as_ref().unwrap().1;
 
-                // Write the result to the CDB
-                let dst = op.dst().as_reg();
-                if let Some(addr) = op.addr() {
-                    self.addresses_in_use.remove(&addr);
-                }
-    
-                self.register_mapping.remove(&dst);
-                removed_registers.push(dst);
-                wrote_to_cdb = true;
-                break;
+        self.get_all_in_stage(Stage::WriteBack).iter().for_each(|(i, op)| {
+            if wrote_to_cdb {
+                return;
             }
-        }
+            // Check if all the instructions before this one are committed
+            let mut all_committed = true;
+            for j in self.tail..self.tail + self.size {
+                if *i == j {
+                    break;
+                }
+                if let Some((_, _, s)) = &self.entries[j % self.size] {
+                    if s != &Stage::Commit {
+                        all_committed = false;
+                        break;
+                    }
+                }
+            }
+            if all_committed && !already_committed {
+                // if let Some(addr) = op.addr() {
+                //     self.addresses_in_use.remove(&addr);
+                // }
+                self.entries[*i].as_mut().unwrap().2 = Stage::Commit;
+                already_committed = true;
+            } else {
+                self.entries[*i].as_mut().unwrap().2 = Stage::WaitingToCommit;
+            }
+
+            if let Some(dst) = op.dst() {
+                debug!("Removing {} from the register mapping", dst);
+                let dst_reg = dst.as_reg();
+                self.register_mapping.remove(&dst_reg);
+                removed_registers.push(dst_reg);
+            }
+            wrote_to_cdb = true;
+        });
+        // for i in self.head..self.head + self.size {
+        //     if self.write_to_cdb(i % self.size) {
+        //         let op = &self.entries[i % self.size].as_ref().unwrap().1;
+
+        //         // Write the result to the CDB
+        //         if let Some(dst) = op.dst() {
+        //             debug!("Removing {} from the register mapping", dst);
+        //             let dst_reg = dst.as_reg();
+        //             self.register_mapping.remove(&dst_reg);
+        //             removed_registers.push(dst_reg);
+        //         }
+        //         // if let Some(addr) = op.addr() {
+        //         //     self.addresses_in_use.remove(&addr);
+        //         // }
+    
+        //         wrote_to_cdb = true;
+        //         break;
+        //     }
+        // }
 
         // Check the MEM stage
         // Get the first issued instruction thats in the MEM stage.
         // If it's a load, check if the address is ready.
         // If it is, then write the result to the CDB.
+        let mut already_accessed = false;
         self.get_all_in_stage(Stage::MemAccess).iter().for_each(|(i, op)| {
             if let Some(addr) = op.addr() {
-                if self.addresses_in_use.contains(&addr) {
+                if self.addresses_stored.contains(&addr) {
                     return;
                 }
-                self.addresses_in_use.insert(addr);
+                if op.is_load() {
+                    self.addresses_loaded.insert(addr);
+                } else {
+                    self.addresses_stored.insert(addr);
+                }
             }
-            self.entries[*i].as_mut().unwrap().2 = Stage::WriteBack;
+            if !already_accessed {
+                self.entries[*i].as_mut().unwrap().2 = Stage::WriteBack;
+                already_accessed = true;
+            }
         });
 
 
@@ -413,13 +484,14 @@ impl ReorderBuffer {
             }
 
             // Write the result to the CDB
-            let dst = op.dst().as_reg();
-            if let Some(addr) = op.addr() {
-                self.addresses_in_use.remove(&addr);
+            if op.addr().is_none() {
+                if let Some(dst) = op.dst() {
+                    debug!("Removing {} from the register mapping", dst);
+                    let dst_reg = dst.as_reg();
+                    self.register_mapping.remove(&dst_reg);
+                    removed_registers.push(dst_reg);
+                }
             }
-
-            self.register_mapping.remove(&dst);
-            removed_registers.push(dst);
         });
 
         // Check the EX stage
@@ -436,9 +508,13 @@ impl ReorderBuffer {
                     // wrote_back = true;
                     if op.accesses_memory() {
                         self.entries[*i].as_mut().unwrap().2 = Stage::MemAccess;
+                        trace!("Freeing up reservation station for {}", op);
+                        self.available_reservation_stations.entry(op.functional_unit()).and_modify(|e| *e += 1);
                     } else if op.writes_back() {
                         if !wrote_to_cdb {
                             self.entries[*i].as_mut().unwrap().2 = Stage::WriteBack;
+                            trace!("Freeing up reservation station for {}", op);
+                            self.available_reservation_stations.entry(op.functional_unit()).and_modify(|e| *e += 1);
                         }
                     } else {
                         // Confirm all the operations before this one are committed
@@ -454,11 +530,17 @@ impl ReorderBuffer {
                                 }
                             }
                         }
-                        if all_committed {
+                        if all_committed && !already_committed {
+                            // if let Some(addr) = op.addr() {
+                            //     self.addresses_in_use.remove(&addr);
+                            // }
                             self.entries[*i].as_mut().unwrap().2 = Stage::Commit;
+                            already_committed = true;
                         } else {
                             self.entries[*i].as_mut().unwrap().2 = Stage::WaitingToCommit;
                         }
+                        trace!("Freeing up reservation station for {}", op);
+                        self.available_reservation_stations.entry(op.functional_unit()).and_modify(|e| *e += 1);
                     }
                 }
             }
@@ -469,14 +551,24 @@ impl ReorderBuffer {
         self.get_all_in_stage(Stage::Issue).iter().for_each(|(i, op)| {
             // Check if any of the source registers are in the register mapping
             if let Some(src1) = op.src1().dep_reg() {
-                if self.register_mapping.contains_key(&src1) {
-                    return;
+                // Check if the source register is the destination of this instruction
+                if let Some(dst) = op.dst() {
+                    if src1 != dst.as_reg() {
+                        if self.register_mapping.contains_key(&src1) {
+                            return;
+                        }
+                    }
                 }
             }
 
             if let Some(src2) = op.src2().dep_reg() {
-                if self.register_mapping.contains_key(&src2) {
-                    return;
+                // Check if the source register is the destination of this instruction
+                if let Some(dst) = op.dst() {
+                    if src2 != dst.as_reg() {
+                        if self.register_mapping.contains_key(&src2) {
+                            return;
+                        }
+                    }
                 }
             }
             // info!("Issue: {}", op);
@@ -505,15 +597,13 @@ impl ReorderBuffer {
             }
 
             // Write the result to the CDB
-            let dst = op.dst().as_reg();
-            if let Some(addr) = op.addr() {
-                self.addresses_in_use.remove(&addr);
+            if let Some(dst) = op.dst() {
+                debug!("Removing {} from the register mapping", dst);
+                let dst_reg = dst.as_reg();
+                self.register_mapping.remove(&dst_reg);
+                removed_registers.push(dst_reg);
             }
-
-            self.register_mapping.remove(&dst);
-            removed_registers.push(dst);
         });
-        
     }
 }
 
@@ -528,6 +618,15 @@ impl Display for ReorderBuffer {
         writeln!(f, "  Available Reservation stations:")?;
         for (fu, i) in &self.available_reservation_stations {
             writeln!(f, "    {:?} -> {}", fu, i)?;
+        }
+
+        writeln!(f, "  Addresses stored:")?;
+        for addr in &self.addresses_stored {
+            writeln!(f, "    {}", addr)?;
+        }
+        writeln!(f, "  Addresses loaded:")?;
+        for addr in &self.addresses_loaded {
+            writeln!(f, "    {}", addr)?;
         }
 
         writeln!(f, "  Head: {}", self.head)?;

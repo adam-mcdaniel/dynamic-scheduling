@@ -1,0 +1,15 @@
+buffers
+
+eff addr: 2
+fp adds: 3
+fp muls: 3
+ints: 2
+reorder: 5
+
+latencies
+
+fp_add: 2
+fp_sub: 2
+fp_mul: 5
+fp_div: 10
+

@@ -1,4 +1,4 @@
-use std::fmt::{*, self};
+use std::fmt::{self, *};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FunctionalUnit {
@@ -139,7 +139,6 @@ impl Operand {
             return Self::global(operand.next().unwrap());
         }
 
-
         let offset = operand.next().unwrap().trim();
         let offset = if let Ok(offset) = offset.parse::<u64>() {
             offset
@@ -174,7 +173,7 @@ impl Display for Operand {
                     write!(f, "{}", c)?;
                 }
                 Ok(())
-            },
+            }
             Operand::None => write!(f, ""),
         }
     }
@@ -240,7 +239,6 @@ impl RiscVOp {
         // Now get all the arguments separated by `,`
         let dst = split_by_space.next().unwrap().split(',').next().unwrap();
 
-
         let mut args = line.split(',');
         args.next();
         // Get the destination
@@ -259,43 +257,104 @@ impl RiscVOp {
             panic!("Could not parse address \"{addr}\"");
         };
 
-
         match op {
-            "add" => RiscVOp::Add(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "sub" => RiscVOp::Sub(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
+            "add" => RiscVOp::Add(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "sub" => RiscVOp::Sub(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
             "lw" => RiscVOp::LoadWord(Operand::parse(dst), Operand::parse(arg1), addr),
             "sw" => RiscVOp::StoreWord(Operand::parse(dst), Operand::parse(arg1), addr),
-            "beq" => RiscVOp::BranchEqual(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "bne" => RiscVOp::BranchNotEqual(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
+            "beq" => RiscVOp::BranchEqual(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "bne" => RiscVOp::BranchNotEqual(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
             "flw" => RiscVOp::LoadFloat(Operand::parse(dst), Operand::parse(arg1), addr),
             "fsw" => RiscVOp::StoreFloat(Operand::parse(dst), Operand::parse(arg1), addr),
-            "fadd" => RiscVOp::FloatAdd(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "fsub" => RiscVOp::FloatSub(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "fmul" => RiscVOp::FloatMul(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "fdiv" => RiscVOp::FloatDiv(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "fadd.s" => RiscVOp::FloatAdd(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "fsub.s" => RiscVOp::FloatSub(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "fmul.s" => RiscVOp::FloatMul(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            "fdiv.s" => RiscVOp::FloatDiv(Operand::parse(dst), Operand::parse(arg1), Operand::parse(arg2.unwrap())),
-            _ => unimplemented!()
+            "fadd" => RiscVOp::FloatAdd(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "fsub" => RiscVOp::FloatSub(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "fmul" => RiscVOp::FloatMul(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "fdiv" => RiscVOp::FloatDiv(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "fadd.s" => RiscVOp::FloatAdd(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "fsub.s" => RiscVOp::FloatSub(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "fmul.s" => RiscVOp::FloatMul(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            "fdiv.s" => RiscVOp::FloatDiv(
+                Operand::parse(dst),
+                Operand::parse(arg1),
+                Operand::parse(arg2.unwrap()),
+            ),
+            _ => unimplemented!(),
         }
     }
 
     pub const fn is_load(&self) -> bool {
-        matches!(self, RiscVOp::LoadWord(_, _, _) | RiscVOp::LoadFloat(_, _, _))
+        matches!(
+            self,
+            RiscVOp::LoadWord(_, _, _) | RiscVOp::LoadFloat(_, _, _)
+        )
     }
 
     pub const fn is_store(&self) -> bool {
-        matches!(self, RiscVOp::StoreWord(_, _, _) | RiscVOp::StoreFloat(_, _, _))
+        matches!(
+            self,
+            RiscVOp::StoreWord(_, _, _) | RiscVOp::StoreFloat(_, _, _)
+        )
     }
 
     pub const fn is_data_transfer(&self) -> bool {
-        matches!(self, RiscVOp::LoadWord(_, _, _) | RiscVOp::StoreWord(_, _, _)
-            | RiscVOp::LoadFloat(_, _, _) | RiscVOp::StoreFloat(_, _, _))
+        matches!(
+            self,
+            RiscVOp::LoadWord(_, _, _)
+                | RiscVOp::StoreWord(_, _, _)
+                | RiscVOp::LoadFloat(_, _, _)
+                | RiscVOp::StoreFloat(_, _, _)
+        )
     }
 
     pub const fn is_branch(&self) -> bool {
-        matches!(self, RiscVOp::BranchEqual(_, _, _) | RiscVOp::BranchNotEqual(_, _, _))
+        matches!(
+            self,
+            RiscVOp::BranchEqual(_, _, _) | RiscVOp::BranchNotEqual(_, _, _)
+        )
     }
 
     pub const fn is_alu(&self) -> bool {
@@ -303,16 +362,27 @@ impl RiscVOp {
     }
 
     pub const fn is_fp(&self) -> bool {
-        matches!(self, RiscVOp::FloatAdd(_, _, _) | RiscVOp::FloatSub(_, _, _)
-            | RiscVOp::FloatMul(_, _, _) | RiscVOp::FloatDiv(_, _, _))
+        matches!(
+            self,
+            RiscVOp::FloatAdd(_, _, _)
+                | RiscVOp::FloatSub(_, _, _)
+                | RiscVOp::FloatMul(_, _, _)
+                | RiscVOp::FloatDiv(_, _, _)
+        )
     }
 
     pub const fn is_fp_add(&self) -> bool {
-        matches!(self, RiscVOp::FloatAdd(_, _, _) | RiscVOp::FloatSub(_, _, _))
+        matches!(
+            self,
+            RiscVOp::FloatAdd(_, _, _) | RiscVOp::FloatSub(_, _, _)
+        )
     }
 
     pub const fn is_fp_mul(&self) -> bool {
-        matches!(self, RiscVOp::FloatMul(_, _, _) | RiscVOp::FloatDiv(_, _, _))
+        matches!(
+            self,
+            RiscVOp::FloatMul(_, _, _) | RiscVOp::FloatDiv(_, _, _)
+        )
     }
     pub const fn is_fp_div(&self) -> bool {
         matches!(self, RiscVOp::FloatDiv(_, _, _))
@@ -384,18 +454,20 @@ impl RiscVOp {
 impl Display for RiscVOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RiscVOp::LoadWord(dst, src, addr)            => write!(f, "lw     {},{}:{addr}", dst, src),
-            RiscVOp::StoreWord(dst, src, addr)           => write!(f, "sw     {},{}:{addr}", dst, src),
-            RiscVOp::Add(dst, src1, src2)            => write!(f, "add    {},{},{}", dst, src1, src2),
-            RiscVOp::Sub(dst, src1, src2)            => write!(f, "sub    {},{},{}", dst, src1, src2),
-            RiscVOp::BranchEqual(dst, src1, src2)    => write!(f, "beq    {},{},{}", dst, src1, src2),
-            RiscVOp::BranchNotEqual(dst, src1, src2) => write!(f, "bne    {},{},{}", dst, src1, src2),
-            RiscVOp::LoadFloat(dst, src, addr)           => write!(f, "flw    {},{}:{addr}", dst, src),
-            RiscVOp::StoreFloat(dst, src, addr)          => write!(f, "fsw    {},{}:{addr}", dst, src),
-            RiscVOp::FloatAdd(dst, src1, src2)       => write!(f, "fadd.s {},{},{}", dst, src1, src2),
-            RiscVOp::FloatSub(dst, src1, src2)       => write!(f, "fsub.s {},{},{}", dst, src1, src2),
-            RiscVOp::FloatMul(dst, src1, src2)       => write!(f, "fmul.s {},{},{}", dst, src1, src2),
-            RiscVOp::FloatDiv(dst, src1, src2)       => write!(f, "fdiv.s {},{},{}", dst, src1, src2),
+            RiscVOp::LoadWord(dst, src, addr) => write!(f, "lw     {},{}:{addr}", dst, src),
+            RiscVOp::StoreWord(dst, src, addr) => write!(f, "sw     {},{}:{addr}", dst, src),
+            RiscVOp::Add(dst, src1, src2) => write!(f, "add    {},{},{}", dst, src1, src2),
+            RiscVOp::Sub(dst, src1, src2) => write!(f, "sub    {},{},{}", dst, src1, src2),
+            RiscVOp::BranchEqual(dst, src1, src2) => write!(f, "beq    {},{},{}", dst, src1, src2),
+            RiscVOp::BranchNotEqual(dst, src1, src2) => {
+                write!(f, "bne    {},{},{}", dst, src1, src2)
+            }
+            RiscVOp::LoadFloat(dst, src, addr) => write!(f, "flw    {},{}:{addr}", dst, src),
+            RiscVOp::StoreFloat(dst, src, addr) => write!(f, "fsw    {},{}:{addr}", dst, src),
+            RiscVOp::FloatAdd(dst, src1, src2) => write!(f, "fadd.s {},{},{}", dst, src1, src2),
+            RiscVOp::FloatSub(dst, src1, src2) => write!(f, "fsub.s {},{},{}", dst, src1, src2),
+            RiscVOp::FloatMul(dst, src1, src2) => write!(f, "fmul.s {},{},{}", dst, src1, src2),
+            RiscVOp::FloatDiv(dst, src1, src2) => write!(f, "fdiv.s {},{},{}", dst, src1, src2),
         }
     }
 }

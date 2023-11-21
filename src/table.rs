@@ -1,8 +1,10 @@
 use super::*;
 use log::*;
 use std::fmt::{self, Display, Formatter};
+
+#[derive(Default)]
 pub struct TomasuloTable {
-    rows: Vec<Row>
+    rows: Vec<Row>,
 }
 
 impl TomasuloTable {
@@ -41,7 +43,7 @@ impl TomasuloTable {
                 }
             } else if reorder_buffer.get_finished_instructions() >= instructions.len() {
                 info!("Stopped at instruction {}:", i);
-                break
+                break;
             }
             let stages = reorder_buffer.get_stages();
             for (instruction_num, op, stage) in stages {
@@ -62,9 +64,13 @@ impl TomasuloTable {
                     Stage::Execute(1) if self.rows[instruction_num].start_ex.is_none() => {
                         self.rows[instruction_num].start_ex = Some(cycle);
                         self.rows[instruction_num].end_ex = Some(cycle);
-                    },
-                    Stage::Execute(1) if self.rows[instruction_num].start_ex.is_some() => self.rows[instruction_num].end_ex = Some(cycle),
-                    Stage::Execute(_) if self.rows[instruction_num].start_ex.is_none() => self.rows[instruction_num].start_ex = Some(cycle),
+                    }
+                    Stage::Execute(1) if self.rows[instruction_num].start_ex.is_some() => {
+                        self.rows[instruction_num].end_ex = Some(cycle)
+                    }
+                    Stage::Execute(_) if self.rows[instruction_num].start_ex.is_none() => {
+                        self.rows[instruction_num].start_ex = Some(cycle)
+                    }
                     Stage::MemAccess => self.rows[instruction_num].mem_access = Some(cycle),
                     Stage::WriteBack => self.rows[instruction_num].write_back = Some(cycle),
                     Stage::Commit => self.rows[instruction_num].committed = Some(cycle),
@@ -95,23 +101,19 @@ impl TomasuloTable {
                     Stage::Execute(1) if self.rows[instruction_num].start_ex.is_none() => {
                         self.rows[instruction_num].start_ex = Some(cycle);
                         self.rows[instruction_num].end_ex = Some(cycle);
-                    },
-                    Stage::Execute(1) if self.rows[instruction_num].start_ex.is_some() => self.rows[instruction_num].end_ex = Some(cycle),
-                    Stage::Execute(_) if self.rows[instruction_num].start_ex.is_none() => self.rows[instruction_num].start_ex = Some(cycle),
+                    }
+                    Stage::Execute(1) if self.rows[instruction_num].start_ex.is_some() => {
+                        self.rows[instruction_num].end_ex = Some(cycle)
+                    }
+                    Stage::Execute(_) if self.rows[instruction_num].start_ex.is_none() => {
+                        self.rows[instruction_num].start_ex = Some(cycle)
+                    }
                     Stage::MemAccess => self.rows[instruction_num].mem_access = Some(cycle),
                     Stage::WriteBack => self.rows[instruction_num].write_back = Some(cycle),
                     Stage::Commit => self.rows[instruction_num].committed = Some(cycle),
                     _ => {}
                 }
             }
-        }
-    }
-}
-
-impl Default for TomasuloTable {
-    fn default() -> Self {
-        Self {
-            rows: Vec::new(),
         }
     }
 }
@@ -144,7 +146,6 @@ impl Display for Row {
         } else {
             write!(f, "{:22}", "?")?;
         }
-
 
         if let Some(issued) = &self.issued {
             write!(f, "{:>6}", issued)?;

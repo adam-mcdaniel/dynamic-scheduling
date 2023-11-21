@@ -1,5 +1,5 @@
-use tomasulos::*;
 use log::*;
+use tomasulos::*;
 
 const CONFIG: Config = Config {
     eff_addr_buffer_entries: 2,

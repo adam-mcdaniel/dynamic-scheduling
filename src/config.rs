@@ -1,5 +1,5 @@
-use std::fmt::{self, Display, Formatter};
 use log::*;
+use std::fmt::{self, Display, Formatter};
 
 pub struct Config {
     pub eff_addr_buffer_entries: u64,
@@ -17,7 +17,7 @@ pub struct Config {
 impl Config {
     pub fn parse(filename: &str) -> Result<Self, String> {
         // buffers
-        // 
+        //
         // eff addr: 2
         // fp adds: 3
         // fp muls: 3
@@ -32,9 +32,8 @@ impl Config {
         // fp_div: 10
 
         // Read the file
-        let contents = std::fs::read_to_string(filename).map_err(|e| {
-            format!("Failed to read {}: {}", filename, e)
-        })?;
+        let contents = std::fs::read_to_string(filename)
+            .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
         info!("Contents of {}: {}", filename, contents);
 
         let mut eff_addr_buffer_entries = 0;
@@ -73,9 +72,11 @@ impl Config {
             }
         }
         if valid_count != 9 {
-            return Err(format!("Expected 9 config parameters, found {}", valid_count));
+            return Err(format!(
+                "Expected 9 config parameters, found {}",
+                valid_count
+            ));
         }
-        
 
         let result = Self {
             eff_addr_buffer_entries,
@@ -83,7 +84,7 @@ impl Config {
             fp_mul_buffer_entries,
             int_buffer_entries,
             reorder_buffer_entries,
-        
+
             fp_add_buffer_latency,
             fp_sub_buffer_latency,
             fp_mul_buffer_latency,
@@ -92,7 +93,6 @@ impl Config {
         Ok(result)
     }
 }
-
 
 impl Display for Config {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -104,7 +104,7 @@ impl Display for Config {
         //     fp muls: 3
         //        ints: 2
         //     reorder: 5
-        
+
         // latencies:
         //    fp add: 2
         //    fp sub: 2

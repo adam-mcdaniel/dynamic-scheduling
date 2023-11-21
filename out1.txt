@@ -1,0 +1,35 @@
+Configuration
+-------------
+buffers:
+   eff addr: 2
+    fp adds: 3
+    fp muls: 3
+       ints: 2
+    reorder: 5
+
+latencies:
+   fp add: 2
+   fp sub: 2
+   fp mul: 5
+   fp div: 10
+
+
+                    Pipeline Simulation
+-----------------------------------------------------------
+                                      Memory Writes
+     Instruction      Issues Executes  Read  Result Commits
+--------------------- ------ -------- ------ ------ -------
+flw    f6,32(x2):0         1   2 -  2      3      4       5
+flw    f2,48(x3):4         2   3 -  3      4      5       6
+fmul.s f0,f2,f4            3   6 - 10            11      12
+fsub.s f8,f6,f2            4   6 -  7             8      13
+fdiv.s f10,f0,f6           5  12 - 21            22      23
+fadd.s f6,f8,f2            6   9 - 10            12      24
+
+
+Delays
+------
+reorder buffer delays: 0
+reservation station delays: 0
+data memory conflict delays: 0
+true dependence delays: 11

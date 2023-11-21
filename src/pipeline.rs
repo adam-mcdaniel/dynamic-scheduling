@@ -72,7 +72,7 @@ impl ReorderBuffer {
         let mut result = Vec::new();
         for i in self.tail..self.tail + self.entries_used {
             if let Some((issued, op, s)) = &self.entries[i % self.size] {
-                result.push((*issued, op.clone(), s.clone()));
+                result.push((*issued, *op, *s));
             }
         }
         result
@@ -120,17 +120,10 @@ impl ReorderBuffer {
 
     pub fn get_all_in_stage(&self, stage: Stage) -> Vec<(usize, RiscVOp)> {
         let mut result = Vec::new();
-        // for (i, entry) in self.entries.iter().enumerate() {
-        //     if let Some((op, s)) = entry {
-        //         if s == &stage {
-        //             result.push((i, op.clone()));
-        //         }
-        //     }
-        // }
         for i in self.head..self.head + self.size {
             if let Some((_, op, s)) = &self.entries[i % self.size] {
                 if s == &stage {
-                    result.push((i % self.size, op.clone()));
+                    result.push((i % self.size, *op));
                 }
             }
         }
@@ -143,18 +136,15 @@ impl ReorderBuffer {
         for i in self.head..self.head + self.size {
             if let Some((_, op, s)) = &self.entries[i % self.size] {
                 if let Stage::Execute(_) = s {
-                    result.push((i % self.size, op.clone()));
+                    result.push((i % self.size, *op));
                 }
             }
         }
         result
     }
 
-    // pub fn has_entry(&self, i: usize) -> bool {
-    //     self.entries[i].is_some()
-    // }
     pub fn write_to_cdb(&mut self, i: usize) -> bool {
-        if let Some((_, op, s)) = &self.entries[i] {
+        if let Some((_, _op, s)) = &self.entries[i] {
             if s == &Stage::WriteBack {
                 // Confirm all the operations before this one are committed
                 let mut all_committed = true;
@@ -178,7 +168,7 @@ impl ReorderBuffer {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     pub fn get_finished_instructions(&self) -> usize {
@@ -202,145 +192,10 @@ impl ReorderBuffer {
         if i >= self.tail && j < self.tail {
             return false;
         }
-        return false;
+        false
     }
 
     pub fn tick(&mut self, config: &Config) {
-        /*
-        let mut wrote_back = false;
-        let mut all_committed = true;
-        for i in self.tail..self.tail + self.size {
-            if self.entries[i % self.size].is_none() {
-                continue;
-            }
-            let mut remove = false;
-            // let stage = &self.entries[i % self.size].as_ref().unwrap().1;
-            let (op, stage) = self.entries[i % self.size].as_mut().unwrap();
-
-            match stage {
-                Stage::Issue => {
-                    // Check if any of the source registers are in the register mapping
-                    if let Some(src1) = op.src1().dep_reg() {
-                        if self.register_mapping.contains_key(&src1) {
-                            debug!("Skipping execution of {} because {} is not ready", op, src1);
-                            return;
-                        }
-                    }
-        
-                    if let Some(src2) = op.src2().dep_reg() {
-                        if self.register_mapping.contains_key(&src2) {
-                            debug!("Skipping execution of {} because {} is not ready", op, src2);
-                            return;
-                        }
-                    }
-                    // info!("Issue: {}", op);
-                    // info!("{}", self);
-        
-                    // Move the instruction to the EX stage
-                    *stage = if op.is_fp_div() {
-                        Stage::Execute(config.fp_div_buffer_latency)
-                    } else if op.is_fp_mul() {
-                        Stage::Execute(config.fp_mul_buffer_latency)
-                    } else if op.is_fp_add() {
-                        Stage::Execute(config.fp_add_buffer_latency)
-                    } else if op.is_branch() {
-                        Stage::Execute(1)
-                    } else if op.is_alu() {
-                        Stage::Execute(1)
-                    } else {
-                        Stage::Execute(1)
-                    }
-                }
-                Stage::Execute(cycles) => {
-                    if *cycles > 0 {
-                        *cycles -= 1;
-                    }
-                    if *cycles <= 0 && !wrote_back {
-                        wrote_back = true;
-                        if op.accesses_memory() {
-                            *stage = Stage::MemAccess;
-                            // self.entries[i].as_mut().unwrap().1 = Stage::MemAccess;
-                        } else if op.writes_back() {
-                            *stage = Stage::WriteBack;
-                            // self.entries[i].as_mut().unwrap().1 = Stage::WriteBack;
-                        } else {
-                            if all_committed {
-                                *stage = Stage::Commit;
-                                all_committed = false;
-                                // self.entries[*i].as_mut().unwrap().1 = Stage::Commit;
-                            } else {
-                                *stage = Stage::WaitingToCommit;
-                                // self.entries[*i].as_mut().unwrap().1 = Stage::WaitingToCommit;
-                            }
-                        }
-                    }
-                }
-
-                Stage::MemAccess => {
-                    if let Some(addr) = op.addr() {
-                        if self.addresses_in_use.contains(&addr) {
-                            return;
-                        }
-                        self.addresses_in_use.insert(addr);
-                    }
-                    *stage = Stage::WriteBack;
-                    // self.entries[*i].as_mut().unwrap().1 = Stage::WriteBack;
-                }
-
-                Stage::WriteBack => {
-                    // Only write to the CDB if we haven't already
-                    if wrote_back {
-                        return;
-                    }
-        
-                    // Write the result to the CDB
-                    let dst = op.dst().as_reg();
-                    if let Some(addr) = op.addr() {
-                        self.addresses_in_use.remove(&addr);
-                    }
-        
-                    self.register_mapping.remove(&dst);
-
-                    wrote_back = true;
-
-                    if all_committed {
-                        *stage = Stage::Commit;
-                        all_committed = false;
-                        // self.entries[*i].as_mut().unwrap().1 = Stage::Commit;
-                    } else {
-                        *stage = Stage::WaitingToCommit;
-                        // self.entries[*i].as_mut().unwrap().1 = Stage::WaitingToCommit;
-                    }
-                }
-
-                Stage::Commit => {
-                    remove = true;
-                }
-
-                Stage::WaitingToCommit => {
-                    // Confirm all the operations before this one are committed
-                    if all_committed {
-                        *stage = Stage::Commit;
-                        all_committed = false;
-                        // self.entries[*i].as_mut().unwrap().1 = Stage::Commit;
-                    }
-                }
-
-                _ => {}
-            }
-
-            if !matches!(stage, Stage::Commit) {
-                all_committed = false;
-            }
-
-            if remove {
-                self.entries_committed += 1;
-                self.entries[i % self.size] = None;
-                self.tail = self.tail.wrapping_add(1) % self.size;
-                self.entries_used -= 1;
-            }
-        }
-        */
         let mut already_committed = false;
 
         // Check the commit stage
@@ -361,7 +216,7 @@ impl ReorderBuffer {
 
 
         // Check the commit stage
-        self.get_all_in_stage(Stage::WaitingToCommit).iter().for_each(|(i, op)| {
+        self.get_all_in_stage(Stage::WaitingToCommit).iter().for_each(|(i, _op)| {
             // Check if all the instructions before this one are committed
             let mut all_committed = true;
             for j in self.tail..self.tail + self.size {
@@ -384,19 +239,8 @@ impl ReorderBuffer {
             }
         });
 
-        // Check the CDB stage
-        // Get the first issued instruction thats in the WB stage.
-        // Write its result to the CDB, and remove it from the register mapping.
-        // let mut i = self.tail;
-        // while i != self.head {
-        //     if self.write_to_cdb(i) {
-        //         break;
-        //     }
-        //     i = i.wrapping_add(1) % self.size;
-        // }
-
+        // Check the WB stage
         let mut removed_registers = Vec::new();
-
         let mut wrote_to_cdb = false;
 
         self.get_all_in_stage(Stage::WriteBack).iter().for_each(|(i, op)| {
@@ -434,25 +278,6 @@ impl ReorderBuffer {
             }
             wrote_to_cdb = true;
         });
-        // for i in self.head..self.head + self.size {
-        //     if self.write_to_cdb(i % self.size) {
-        //         let op = &self.entries[i % self.size].as_ref().unwrap().1;
-
-        //         // Write the result to the CDB
-        //         if let Some(dst) = op.dst() {
-        //             debug!("Removing {} from the register mapping", dst);
-        //             let dst_reg = dst.as_reg();
-        //             self.register_mapping.remove(&dst_reg);
-        //             removed_registers.push(dst_reg);
-        //         }
-        //         // if let Some(addr) = op.addr() {
-        //         //     self.addresses_in_use.remove(&addr);
-        //         // }
-    
-        //         wrote_to_cdb = true;
-        //         break;
-        //     }
-        // }
 
         // Check the MEM stage
         // Get the first issued instruction thats in the MEM stage.
@@ -477,7 +302,7 @@ impl ReorderBuffer {
         });
 
 
-        self.get_all_in_stage(Stage::WriteBack).iter().for_each(|(i, op)| {
+        self.get_all_in_stage(Stage::WriteBack).iter().for_each(|(_i, op)| {
             // Only write to the CDB if we haven't already
             if wrote_to_cdb {
                 return;
@@ -497,7 +322,7 @@ impl ReorderBuffer {
         // Check the EX stage
         // Go through and decrement the cycles left to execute.
         // If it's 0, then move it to the MEM stage.
-        let mut wrote_back = false;
+        let _wrote_back = false;
         self.get_all_in_ex().iter().for_each(|(i, op)| {
             if let Stage::Execute(cycles) = &mut self.entries[*i].as_mut().unwrap().2 {
                 if *cycles > 0 {
@@ -523,7 +348,7 @@ impl ReorderBuffer {
                             if *i == j {
                                 break;
                             }
-                            if let Some((_, op, s)) = &self.entries[j % self.size] {
+                            if let Some((_, _op, s)) = &self.entries[j % self.size] {
                                 if s != &Stage::Commit {
                                     all_committed = false;
                                     break;
@@ -545,18 +370,14 @@ impl ReorderBuffer {
                 }
             }
         });
-        // /*        
-        // */
         // Check the issue stage
         self.get_all_in_stage(Stage::Issue).iter().for_each(|(i, op)| {
             // Check if any of the source registers are in the register mapping
             if let Some(src1) = op.src1().dep_reg() {
                 // Check if the source register is the destination of this instruction
                 if let Some(dst) = op.dst() {
-                    if src1 != dst.as_reg() {
-                        if self.register_mapping.contains_key(&src1) {
-                            return;
-                        }
+                    if src1 != dst.as_reg() && self.register_mapping.contains_key(&src1) {
+                        return;
                     }
                 }
             }
@@ -564,15 +385,11 @@ impl ReorderBuffer {
             if let Some(src2) = op.src2().dep_reg() {
                 // Check if the source register is the destination of this instruction
                 if let Some(dst) = op.dst() {
-                    if src2 != dst.as_reg() {
-                        if self.register_mapping.contains_key(&src2) {
-                            return;
-                        }
+                    if src2 != dst.as_reg() && self.register_mapping.contains_key(&src2) {
+                        return;
                     }
                 }
             }
-            // info!("Issue: {}", op);
-            // info!("{}", self);
 
             // Move the instruction to the EX stage
             self.entries[*i].as_mut().unwrap().2 = if op.is_fp_div() {
@@ -590,7 +407,7 @@ impl ReorderBuffer {
             }
         });
 
-        self.get_all_in_stage(Stage::WriteBack).iter().for_each(|(i, op)| {
+        self.get_all_in_stage(Stage::WriteBack).iter().for_each(|(_i, op)| {
             // Only write to the CDB if we haven't already
             if wrote_to_cdb {
                 return;
@@ -631,7 +448,6 @@ impl Display for ReorderBuffer {
 
         writeln!(f, "  Head: {}", self.head)?;
         writeln!(f, "  Tail: {}", self.tail)?;
-        // writeln!(f, "  Mask: {:x}", self.mask)?;
         writeln!(f, "  Entries used: {}", self.entries_used)?;
         writeln!(f, "  Entries committed: {}", self.entries_committed)?;
         writeln!(f, "  Entries:")?;

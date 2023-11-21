@@ -49,7 +49,7 @@ impl Config {
 
         let mut valid_count = 0;
         for line in contents.lines() {
-            let mut parts = line.split(":");
+            let mut parts = line.split(':');
             if parts.clone().count() != 2 {
                 debug!("Skipping line: {}", line);
                 continue;

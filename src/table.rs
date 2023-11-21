@@ -7,9 +7,7 @@ pub struct TomasuloTable {
 
 impl TomasuloTable {
     pub fn new() -> Self {
-        Self {
-            rows: vec![],
-        }
+        Self::default()
     }
 
     pub fn run(&mut self, instructions: Vec<RiscVOp>, config: &Config) {
@@ -21,13 +19,9 @@ impl TomasuloTable {
             if reorder_buffer.get_finished_instructions() >= instructions.len() {
                 break;
             }
-            // if cycle > 10 {
-            //     break;
-            // }
-
 
             if i < instructions.len() {
-                let op = instructions[i].clone();
+                let op = instructions[i];
                 if reorder_buffer.add(op).is_ok() {
                     while self.rows.len() <= i {
                         self.rows.push(Row {
@@ -45,7 +39,7 @@ impl TomasuloTable {
                 } else {
                     trace!("Failed to add instruction {i}: {op}");
                 }
-            } else if (reorder_buffer.get_finished_instructions() >= instructions.len()) {
+            } else if reorder_buffer.get_finished_instructions() >= instructions.len() {
                 info!("Stopped at instruction {}:", i);
                 break
             }
@@ -81,7 +75,6 @@ impl TomasuloTable {
             cycle += 1;
             trace!("Cycle {}\n\n{}", cycle, reorder_buffer);
 
-
             let stages = reorder_buffer.get_stages();
 
             for (instruction_num, op, stage) in stages {
@@ -111,7 +104,14 @@ impl TomasuloTable {
                     _ => {}
                 }
             }
-            // self.rows[i].issued = stages[0];
+        }
+    }
+}
+
+impl Default for TomasuloTable {
+    fn default() -> Self {
+        Self {
+            rows: Vec::new(),
         }
     }
 }
@@ -168,30 +168,26 @@ impl Display for Row {
 
         if let Some(mem_access) = &self.mem_access {
             write!(f, "{:>7}", mem_access)?;
-        } else {
-            if let Some(op) = self.op {
-                if op.accesses_memory() {
-                    write!(f, "{:>7}", "?")?;
-                } else {
-                    write!(f, "{:>7}", "")?;
-                }
-            } else {
+        } else if let Some(op) = self.op {
+            if op.accesses_memory() {
                 write!(f, "{:>7}", "?")?;
+            } else {
+                write!(f, "{:>7}", "")?;
             }
+        } else {
+            write!(f, "{:>7}", "?")?;
         }
 
         if let Some(write_back) = &self.write_back {
             write!(f, "{:>7}", write_back)?;
-        } else {
-            if let Some(op) = self.op {
-                if op.writes_back() {
-                    write!(f, "{:>7}", "?")?;
-                } else {
-                    write!(f, "{:>7}", "")?;
-                }
-            } else {
+        } else if let Some(op) = self.op {
+            if op.writes_back() {
                 write!(f, "{:>7}", "?")?;
+            } else {
+                write!(f, "{:>7}", "")?;
             }
+        } else {
+            write!(f, "{:>7}", "?")?;
         }
 
         if let Some(committed) = &self.committed {

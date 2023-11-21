@@ -18,8 +18,8 @@ impl Register {
     fn parse_gp(reg: &str) -> Option<Self> {
         let reg = reg.trim();
 
-        if reg.starts_with("x") {
-            let reg = reg.trim_start_matches("x");
+        if reg.starts_with('x') {
+            let reg = reg.trim_start_matches('x');
             if let Ok(reg) = reg.parse::<u64>() {
                 return Some(Register::GP(reg));
             }
@@ -31,8 +31,8 @@ impl Register {
     fn parse_fp(reg: &str) -> Option<Self> {
         let reg = reg.trim();
 
-        if reg.starts_with("f") {
-            let reg = reg.trim_start_matches("f");
+        if reg.starts_with('f') {
+            let reg = reg.trim_start_matches('f');
             if let Ok(reg) = reg.parse::<u64>() {
                 return Some(Register::FP(reg));
             }
@@ -86,7 +86,7 @@ pub enum Operand {
 
 impl Operand {
     fn global(name: &str) -> Self {
-        let mut chars = name.chars().collect::<Vec<char>>();
+        let chars = name.chars().collect::<Vec<char>>();
         // Convert into array
         let mut result = ['\0'; GLOBAL_NAME_SIZE];
         for i in 0..chars.len() {
@@ -156,7 +156,7 @@ impl Operand {
             panic!("Could not parse register \"{reg}\"");
         };
 
-        return Operand::Indirect(reg, offset);
+        Operand::Indirect(reg, offset)
     }
 }
 

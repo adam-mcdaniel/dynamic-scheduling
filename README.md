@@ -32,7 +32,6 @@ Running reference...
 To build my program, use the Rust package manager: `cargo` (🚀blazingly fast🚀 [(except 🚀🚀compile🚀 time🚀)](https://www.wikihow.com/Kill-Time)).
 
 ```bash
-$ cd tomasulos
 $ # Compile the simulator in release mode
 $ cargo build --release
 $ # You can use this command to copy the compiled executable to the working directory, if you want.

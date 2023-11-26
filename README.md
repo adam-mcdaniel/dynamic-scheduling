@@ -2,12 +2,14 @@
 
 ### **Tomasulo's Dynamic Scheduling Algorithm**
 
+![Tomasulo's Algorithm](image.png)
+
 ***COSC 530 - Adam McDaniel***
 ---
 
 ## Overview
 
-My program completely matches the short trace, but my implementation seems to issue a store instruction one cycle earlier than the reference implementation, which causes the implementation to be *slightly* off. It performs the all the main logic for the scheduling, but I seem to have a slight difference with the reference in an edge case.
+My program completely matches the short trace, but my implementation seems to issue a store instruction one cycle earlier than the reference implementation, which causes mine to be slightly off. It performs the all the main logic for the scheduling, but I seem to have a slight difference with the reference in an edge case or two.
 
 You can use my Makefile to compare my output against the reference. Pass the trace to test with using `trace=` on the command line.
 
@@ -37,7 +39,9 @@ $ # You can use this command to copy the compiled executable to the working dire
 $ cp target/release/tomasulos .
 ```
 
-You can run my program by passing the trace file as a command line argument, or by passing it as standard input.
+You can run my program by passing the trace file by piping/redirecting through standard input.
+
+Or type it by hand. You won't.
 
 ```bash
 $ # Compile the simulator in release mode
@@ -47,6 +51,8 @@ $ ./target/release/tomasulos < trace.dat > output.txt
 ```
 
 #### Logging
+
+![Bad Code](image-1.png)
 
 If you want to run with logging, use the `RUST_LOG` environment variable. You can choose from `info`, `debug`, or `trace` log levels for increasing verbosity.
 

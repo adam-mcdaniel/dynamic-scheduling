@@ -32,6 +32,11 @@ pub struct ReorderBuffer {
     size: usize,
     entries_used: usize,
     entries_committed: usize,
+    
+    reorder_buffer_delays: u64,
+    reservation_station_delays: u64,
+    data_memory_conflict_delays: u64,
+    true_dependence_delays: u64
 }
 
 impl From<&Config> for ReorderBuffer {
@@ -41,6 +46,10 @@ impl From<&Config> for ReorderBuffer {
 }
 
 impl ReorderBuffer {
+    pub fn get_delays(&self) -> (u64, u64, u64, u64) {
+        (self.reorder_buffer_delays, self.reservation_station_delays, self.data_memory_conflict_delays, self.true_dependence_delays)
+    }
+
     pub fn new(config: &Config) -> Self {
         let size = config.reorder_buffer_entries as usize;
         let mut entries = Vec::with_capacity(size);
@@ -75,6 +84,11 @@ impl ReorderBuffer {
             size,
             entries_used: 0,
             entries_committed: 0,
+
+            reorder_buffer_delays: 0,
+            reservation_station_delays: 0,
+            data_memory_conflict_delays: 0,
+            true_dependence_delays: 0
         }
     }
 
@@ -92,6 +106,7 @@ impl ReorderBuffer {
 
     pub fn add(&mut self, op: RiscVOp) -> Result<(), ()> {
         if self.entries_used >= self.size {
+            self.reorder_buffer_delays += 1;
             return Err(());
         }
 
@@ -101,17 +116,21 @@ impl ReorderBuffer {
             .get_mut(&op.functional_unit())
         {
             if *available == 0 {
+                self.reservation_station_delays += 1;
                 return Err(());
             }
         } else {
+            self.reservation_station_delays += 1;
             return Err(());
         }
 
         if let Some(addr) = op.addr() {
             if self.addresses_loaded.contains(&addr) {
+                self.data_memory_conflict_delays += 1;
                 return Err(());
             }
             if self.addresses_stored.contains(&addr) {
+                self.data_memory_conflict_delays += 1;
                 return Err(());
             }
         }
@@ -256,6 +275,7 @@ impl ReorderBuffer {
                     // }
                     self.entries[*i].as_mut().unwrap().2 = Stage::Commit;
                     already_committed = true;
+                } else {
                 }
             });
 
@@ -311,6 +331,7 @@ impl ReorderBuffer {
             .for_each(|(i, op)| {
                 if let Some(addr) = op.addr() {
                     if self.addresses_stored.contains(&addr) {
+                        self.data_memory_conflict_delays += 1;
                         return;
                     }
                     if op.is_load() {
@@ -410,6 +431,7 @@ impl ReorderBuffer {
                     // Check if the source register is the destination of this instruction
                     if let Some(dst) = op.dst() {
                         if src1 != dst.as_reg() && self.register_mapping.contains_key(&src1) {
+                            self.true_dependence_delays += 1;
                             return;
                         }
                     }
@@ -419,6 +441,7 @@ impl ReorderBuffer {
                     // Check if the source register is the destination of this instruction
                     if let Some(dst) = op.dst() {
                         if src2 != dst.as_reg() && self.register_mapping.contains_key(&src2) {
+                            self.true_dependence_delays += 1;
                             return;
                         }
                     }

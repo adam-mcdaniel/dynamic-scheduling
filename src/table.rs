@@ -5,6 +5,11 @@ use std::fmt::{self, Display, Formatter};
 #[derive(Default)]
 pub struct TomasuloTable {
     rows: Vec<Row>,
+
+    reorder_buffer_delays: u64,
+    reservation_station_delays: u64,
+    data_memory_conflict_delays: u64,
+    true_dependence_delays: u64
 }
 
 impl TomasuloTable {
@@ -115,6 +120,14 @@ impl TomasuloTable {
                 }
             }
         }
+
+        let (a, b, c, d) = reorder_buffer.get_delays();
+        self.reorder_buffer_delays = a;
+        self.reservation_station_delays = b;
+        self.data_memory_conflict_delays = c;
+        self.true_dependence_delays = d;
+
+        info!("Finished simulation");
     }
 }
 
@@ -125,6 +138,15 @@ impl Display for TomasuloTable {
         for row in &self.rows {
             writeln!(f, "{}", row)?;
         }
+
+        writeln!(f)?;
+        writeln!(f)?;
+        writeln!(f, "Delays")?;
+        writeln!(f, "------")?;
+        writeln!(f, "reorder buffer delays: {}", self.reorder_buffer_delays)?;
+        writeln!(f, "reservation station delays: {}", self.reservation_station_delays)?;
+        writeln!(f, "data memory conflict delays: {}", self.data_memory_conflict_delays)?;
+        write!(f, "true dependence delays: {}", self.true_dependence_delays)?;
         Ok(())
     }
 }

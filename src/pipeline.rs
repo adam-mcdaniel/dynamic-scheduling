@@ -135,6 +135,38 @@ impl ReorderBuffer {
             }
         }
 
+
+        // // Check if any of the source registers are in the register mapping
+        // if let Some(src1) = op.src1().dep_reg() {
+        //     // Check if the source register is the destination of this instruction
+        //     if let Some(dst) = op.dst() {
+        //         if src1 != dst.as_reg() && self.register_mapping.contains_key(&src1) {
+        //             self.true_dependence_delays += 1;
+        //             return Err(());
+        //         }
+        //     // } else {
+        //     //     if self.register_mapping.contains_key(&src1) {
+        //     //         self.true_dependence_delays += 1;
+        //     //         return Err(());
+        //     //     }
+        //     }
+        // }
+
+        // if let Some(src2) = op.src2().dep_reg() {
+        //     // Check if the source register is the destination of this instruction
+        //     if let Some(dst) = op.dst() {
+        //         if src2 != dst.as_reg() && self.register_mapping.contains_key(&src2) {
+        //             self.true_dependence_delays += 1;
+        //             return Err(());
+        //         }
+        //     // } else {
+        //     //     if self.register_mapping.contains_key(&src2) {
+        //     //         self.true_dependence_delays += 1;
+        //     //         return Err(());
+        //     //     }
+        //     }
+        // }
+
         // Get the reservation station for the op
         debug!("Adding {} to the reservation station", op);
         self.available_reservation_stations
